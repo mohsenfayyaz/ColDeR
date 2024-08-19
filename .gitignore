@@ -1,0 +1,4 @@
+.ipynb_checkpoints/*
+src/notebooks/.ipynb_checkpoints/*
+.env
+src/notebooks/datasets/*
