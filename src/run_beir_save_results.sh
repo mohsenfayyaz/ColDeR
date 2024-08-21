@@ -3,6 +3,6 @@
 args=(
     --dataset "nq"
     --model "facebook/contriever-msmarco"
-    --use_gold_docs True
+    --use_gold_docs False
 )
 python beir_save_results.py "${args[@]}"

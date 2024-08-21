@@ -14,7 +14,7 @@ from beir.retrieval.evaluation import EvaluateRetrieval
 from beir.retrieval.search.dense import DenseRetrievalExactSearch as DRES
 
 load_dotenv()
-login(os.environ["HF_API_TOKEN"])
+login(os.environ["HF_TOKEN"])
 print("CUDA_VISIBLE_DEVICES:", os.environ["CUDA_VISIBLE_DEVICES"], "HF_HOME:", os.environ["HF_HOME"])
 
 def main(args):
@@ -48,10 +48,17 @@ def main(args):
         "#Gold_Corpus:": len(gold_docs),
         "#Queries&qrels:": len(queries)
     })
+    
+    
     if args.use_gold_docs:
         corpus = {d: corpus_raw[d] for d in gold_docs}
     else:
         corpus = corpus_raw
+    # print(gold_docs)
+    # print(corpus_raw["doc101116"])
+    # print(qrels["test2955"])
+    # print("doc101116" in gold_docs)
+    # print(corpus["doc101116"])
 
     model = DRES(models.SentenceBERT(MODEL), batch_size=128)
     retriever = EvaluateRetrieval(model, score_function="cos_sim")
@@ -63,18 +70,24 @@ def main(args):
     logging.info("Retriever evaluation for k in: {}".format(retriever.k_values))
     ndcg, _map, recall, precision = retriever.evaluate(qrels, results, retriever.k_values)
 
-
+    # print(len(results["test0"]))
+    # print(results["test2955"]["doc101116"])
+    
     #### UPLOAD ON HF
     df_dict = []
     sorted_results = {k: dict(sorted(v.items(), key=lambda item: item[1], reverse=True)) for k, v in results.items()}
-    for key in tqdm(sorted_results.keys()):
+    for query_id in tqdm(sorted_results.keys()):
+        score_values = list(sorted_results[query_id].values())
         df_dict.append({
-            "key": key,
-            "query": queries[key],
-            "gold_docs": [k for k, v in qrels[key].items()],
-            "gold_docs_text": [corpus[k] for k, v in qrels[key].items()],
-            "results": sorted_results[key],
-            "predicted_docs_text_5": [corpus[k] for k, v in dict(list(sorted_results[key].items())[:5]).items()],
+            "query_id": query_id,
+            "query": queries[query_id],
+            "gold_docs": [doc_id for doc_id, v in qrels[query_id].items()],
+            "gold_docs_text": {doc_id: corpus[doc_id] for doc_id, v in qrels[query_id].items()},
+            "scores_stats": {"len": len(score_values), "max": max(score_values), "min": min(score_values), "std": np.std(score_values), "mean": np.mean(score_values), "median": np.median(score_values)},
+            "scores_gold": {doc_id: sorted_results[query_id].get(doc_id, None) for doc_id, v in qrels[query_id].items()},
+            "scores_1000": dict(list(sorted_results[query_id].items())[:1000]),
+            # "scores_1000": sorted_results[query_id],
+            "predicted_docs_text_10": {doc_id: corpus[doc_id] for doc_id, v in dict(list(sorted_results[query_id].items())[:10]).items()},
         })
     df = pd.DataFrame(df_dict)
     df.attrs['model'] = MODEL
@@ -82,9 +95,11 @@ def main(args):
     df.attrs['corpus_size'] = len(corpus)
     df.attrs['eval'] = {"ndcg": ndcg, "map": _map, "recall": recall, "precision": precision}
     logging.info(df.attrs)
-    hf_path = f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet"
-    df.to_parquet(hf_path.replace("hf://datasets/Retriever-Contextualization/", "./"))
-    df.to_parquet(hf_path)
+    hf_path = f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}"
+    df.to_pickle(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.pkl")
+    df.to_pickle(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.pkl.gz")
+    df.to_parquet(f"./datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
+    df.to_parquet(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
     logging.info(f"UPLOADED: {hf_path}")
     df
 
