@@ -17,43 +17,62 @@ load_dotenv()
 login(os.environ["HF_TOKEN"])
 print("CUDA_VISIBLE_DEVICES:", os.environ["CUDA_VISIBLE_DEVICES"], "HF_HOME:", os.environ["HF_HOME"])
 
+#### Just some code to print debug information to stdout
+logging.basicConfig(format='%(asctime)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO,
+                    handlers=[LoggingHandler()])
+#### /print debug information to stdout[]
+
+class DatasetLoader:
+    def __init__(self):
+        pass
+
+    def load_dataset(self, dataset_name, use_gold_docs=False) -> dict:
+        if dataset_name == "re-docred":
+            pass
+        else:
+            corpus_raw, queries, qrels = self.load_beir_datasets(dataset_name)
+
+        gold_docs = set()
+        for test_k, test_v in tqdm(qrels.items()):
+            for doc_k, doc_v in test_v.items():
+                gold_docs.add(doc_k)
+        logging.info({
+            "#Corpus:": len(corpus_raw), 
+            "#Gold_Corpus:": len(gold_docs),
+            "#Queries&qrels:": len(queries)
+        })
+        if use_gold_docs:
+            corpus = {d: corpus_raw[d] for d in gold_docs}
+        else:
+            corpus = corpus_raw
+        return corpus, queries, qrels
+    
+    def load_redocred_dataset(self):
+        df = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test.pkl")
+        
+    
+    def load_beir_datasets(self, dataset_name):
+        url = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip".format(dataset_name)
+        out_dir = os.path.join(os.getcwd(), "datasets")
+        data_path = util.download_and_unzip(url, out_dir)
+        logging.info("Dataset downloaded here: {}".format(data_path))
+
+        data_path = f"datasets/{dataset_name}"
+        corpus_raw, queries, qrels = GenericDataLoader(data_path).load(split="test") # or split = "train" or "dev"
+
+        print(type(corpus_raw), type(queries), type(qrels))
+        print(print(queries))
+        print(AA)
+        return corpus_raw, queries, qrels
+
+
 def main(args):
     DATASET = args.dataset
     MODEL = args.model  # "facebook/contriever-msmarco"  # "msmarco-distilbert-base-v3"
 
-    #### Just some code to print debug information to stdout
-    logging.basicConfig(format='%(asctime)s - %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        level=logging.INFO,
-                        handlers=[LoggingHandler()])
-    #### /print debug information to stdout[]
-
-    
-    import pathlib, os
-    from beir import util
-    url = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip".format(DATASET)
-    out_dir = os.path.join(os.getcwd(), "datasets")
-    data_path = util.download_and_unzip(url, out_dir)
-    logging.info("Dataset downloaded here: {}".format(data_path))
-
-    data_path = f"datasets/{DATASET}"
-    corpus_raw, queries, qrels = GenericDataLoader(data_path).load(split="test") # or split = "train" or "dev"
-
-    gold_docs = set()
-    for test_k, test_v in tqdm(qrels.items()):
-        for doc_k, doc_v in test_v.items():
-            gold_docs.add(doc_k)
-    logging.info({
-        "#Corpus:": len(corpus_raw), 
-        "#Gold_Corpus:": len(gold_docs),
-        "#Queries&qrels:": len(queries)
-    })
-    
-    
-    if args.use_gold_docs:
-        corpus = {d: corpus_raw[d] for d in gold_docs}
-    else:
-        corpus = corpus_raw
+    corpus, queries, qrels = DatasetLoader().load_dataset(DATASET, use_gold_docs=args.use_gold_docs)
     # print(gold_docs)
     # print(corpus_raw["doc101116"])
     # print(qrels["test2955"])
@@ -98,8 +117,8 @@ def main(args):
     hf_path = f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}"
     df.to_pickle(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.pkl")
     df.to_pickle(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.pkl.gz")
-    df.to_parquet(f"./datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
-    df.to_parquet(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
+    # df.to_parquet(f"./datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
+    # df.to_parquet(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
     logging.info(f"UPLOADED: {hf_path}")
     df
 

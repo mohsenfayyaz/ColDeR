@@ -1,4 +1,5 @@
 # cd src/
+# bash run_beir_save_results.sh
 
 args=(
     --dataset "nq"
