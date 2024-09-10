@@ -29,31 +29,44 @@ class DatasetLoader:
         pass
 
     def load_dataset(self, dataset_name, use_gold_docs=False) -> dict:
-        if dataset_name == "re-docred":
-            pass
-        else:
-            corpus_raw, queries, qrels = self.load_beir_datasets(dataset_name)
+        """
+        write docstirng here
 
-        gold_docs = set()
-        for test_k, test_v in tqdm(qrels.items()):
-            for doc_k, doc_v in test_v.items():
-                gold_docs.add(doc_k)
-        logging.info({
-            "#Corpus:": len(corpus_raw), 
-            "#Gold_Corpus:": len(gold_docs),
-            "#Queries&qrels:": len(queries)
-        })
-        if use_gold_docs:
-            corpus = {d: corpus_raw[d] for d in gold_docs}
+        Args:
+            dataset_name (str): name of the dataset [re-docred, nq, ...]
+            use_gold_docs (bool, optional): To use only gold docs as corpus or not. Defaults to False.
+        
+        Returns:
+            dict: {
+                queries: {'test0': 'what is non controlling interest on balance sheet', ...}
+                qrels: {'test0': {'doc0': 1, 'doc1': 1}, ...)
+                corpus: {'doc0': {'text': "In accou...", 'title': 'Minority interest'}, ...})
+            }
+        """
+        logging.info(f"Loading dataset: {dataset_name}")
+        if dataset_name == "re-docred":
+            dataset = self.load_redocred_dataset()
         else:
-            corpus = corpus_raw
-        return corpus, queries, qrels
+            dataset = self.load_beir_datasets(dataset_name, use_gold_docs)
+        logging.info({
+            "#Corpus:": len(dataset['corpus']), 
+            "#Queries&qrels:": len(dataset['queries']),
+        })
+        return dataset
     
     def load_redocred_dataset(self):
-        df = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test.pkl")
-        
+        df = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test_clean.pkl")
+        queries = {row["id"]: row["query_question"] for i, row in df.iterrows()}
+        qrels = {row["id"]: {row["title"]: 1} for i, row in df.iterrows()}
+        df_cropus = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/corpus_all.pkl.gz")
+        corpus = {row["title"]: {"text": " ".join([" ".join(sent) for sent in row["sents"]]), "title": row["title"]} for i, row in df_cropus.iterrows()}
+        return {
+            "corpus": corpus,
+            "queries": queries,
+            "qrels": qrels
+        }
     
-    def load_beir_datasets(self, dataset_name):
+    def load_beir_datasets(self, dataset_name, use_gold_docs):
         url = "https://public.ukp.informatik.tu-darmstadt.de/thakur/BEIR/datasets/{}.zip".format(dataset_name)
         out_dir = os.path.join(os.getcwd(), "datasets")
         data_path = util.download_and_unzip(url, out_dir)
@@ -62,22 +75,27 @@ class DatasetLoader:
         data_path = f"datasets/{dataset_name}"
         corpus_raw, queries, qrels = GenericDataLoader(data_path).load(split="test") # or split = "train" or "dev"
 
-        print(type(corpus_raw), type(queries), type(qrels))
-        print(print(queries))
-        print(AA)
-        return corpus_raw, queries, qrels
+        gold_docs = set()
+        for test_k, test_v in tqdm(qrels.items()):
+            for doc_k, doc_v in test_v.items():
+                gold_docs.add(doc_k)
+        if use_gold_docs:
+            corpus = {d: corpus_raw[d] for d in gold_docs}
+        else:
+            corpus = corpus_raw
+        return {
+            "corpus": corpus,
+            "queries": queries,
+            "qrels": qrels
+        }
 
 
 def main(args):
     DATASET = args.dataset
     MODEL = args.model  # "facebook/contriever-msmarco"  # "msmarco-distilbert-base-v3"
 
-    corpus, queries, qrels = DatasetLoader().load_dataset(DATASET, use_gold_docs=args.use_gold_docs)
-    # print(gold_docs)
-    # print(corpus_raw["doc101116"])
-    # print(qrels["test2955"])
-    # print("doc101116" in gold_docs)
-    # print(corpus["doc101116"])
+    dataset = DatasetLoader().load_dataset(DATASET, use_gold_docs=args.use_gold_docs)
+    corpus, queries, qrels = dataset["corpus"], dataset["queries"], dataset["qrels"]
 
     model = DRES(models.SentenceBERT(MODEL), batch_size=128)
     retriever = EvaluateRetrieval(model, score_function="cos_sim")
@@ -88,9 +106,6 @@ def main(args):
     #### Evaluate your retrieval using NDCG@k, MAP@K ...
     logging.info("Retriever evaluation for k in: {}".format(retriever.k_values))
     ndcg, _map, recall, precision = retriever.evaluate(qrels, results, retriever.k_values)
-
-    # print(len(results["test0"]))
-    # print(results["test2955"]["doc101116"])
     
     #### UPLOAD ON HF
     df_dict = []
@@ -117,8 +132,6 @@ def main(args):
     hf_path = f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}"
     df.to_pickle(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.pkl")
     df.to_pickle(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.pkl.gz")
-    # df.to_parquet(f"./datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
-    # df.to_parquet(f"hf://datasets/Retriever-Contextualization/datasets/{DATASET}/{MODEL.replace('/', '--')}_corpus{len(corpus)}.parquet")
     logging.info(f"UPLOADED: {hf_path}")
     df
 
