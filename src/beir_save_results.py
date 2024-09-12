@@ -55,7 +55,7 @@ class DatasetLoader:
         return dataset
     
     def load_redocred_dataset(self):
-        df = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test_clean.pkl")
+        df = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test_validation_clean.pkl")
         queries = {row["id"]: row["query_question"] for i, row in df.iterrows()}
         qrels = {row["id"]: {row["title"]: 1} for i, row in df.iterrows()}
         df_cropus = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/corpus_all.pkl.gz")
