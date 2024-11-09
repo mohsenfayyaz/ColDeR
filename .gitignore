@@ -4,3 +4,4 @@ src/notebooks/.ipynb_checkpoints/*
 src/notebooks/datasets/*
 src/datasets/*
 src/notebooks/DocRED/*
+src/re-docred_facebook--contriever-msmarco_7170.pkl
