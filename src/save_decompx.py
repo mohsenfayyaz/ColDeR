@@ -117,7 +117,8 @@ model, tokenizer = load_model_tokenizer(MODEL)
 print(MODEL)
 
 def run_decompx(text):
-    inputs = tokenizer([text], padding=True, truncation=True, return_tensors='pt')
+    text = text.split()
+    inputs = tokenizer([text], padding=True, truncation=True, return_tensors='pt', is_split_into_words=True)
     input_ids = inputs["input_ids"]
     inputs.to(model.device)
     with torch.no_grad():
@@ -158,6 +159,7 @@ for row in tqdm(dfc.to_dict(orient="records")):
         row_decompx[f"pred_doc_decompx_{k}"] = v
     new_cols.append(row_decompx)
 dfc = pd.concat([dfc, pd.DataFrame(new_cols)], axis=1)
+dfc.attrs = attrs
 
 path = f"re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl"
 dfc.to_pickle(path)
