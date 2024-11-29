@@ -1,4 +1,5 @@
 import os
+import torch
 import logging
 import argparse
 import numpy as np
@@ -6,6 +7,9 @@ import pandas as pd
 from tqdm.auto import tqdm
 from dotenv import load_dotenv
 from huggingface_hub import login
+from typing import List, Dict, Union, Tuple
+from transformers import AutoTokenizer, AutoModel
+
 
 from beir.retrieval import models
 from beir import util, LoggingHandler
@@ -88,17 +92,67 @@ class DatasetLoader:
             "queries": queries,
             "qrels": qrels
         }
+        
+class YourCustomDEModel:
+    def __init__(self, q_model, doc_model, pooling, sep: str = " ", **kwargs):
+        self.tokenizer = AutoTokenizer.from_pretrained(q_model)
+        self.query_encoder = AutoModel.from_pretrained(q_model)
+        self.context_encoder = AutoModel.from_pretrained(doc_model)
+        self.pooling = pooling
+        self.sep = sep
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+    
+    # Write your own encoding query function (Returns: Query embeddings as numpy array)
+    def encode_queries(self, queries: List[str], batch_size=128, **kwargs) -> np.ndarray:
+        print("Q")
+        print(len(queries))
+        return self.encode_in_batch(self.query_encoder, queries, batch_size)
+    
+    # Write your own encoding corpus function (Returns: Document embeddings as numpy array)  
+    def encode_corpus(self, corpus: List[Dict[str, str]], batch_size=128, **kwargs) -> np.ndarray:
+        if type(corpus) is dict:
+            sentences = [(corpus["title"][i] + self.sep + corpus["text"][i]).strip() if "title" in corpus else corpus["text"][i].strip() for i in range(len(corpus['text']))]
+        else:
+            sentences = [(doc["title"] + self.sep + doc["text"]).strip() if "title" in doc else doc["text"].strip() for doc in corpus]
+        return self.encode_in_batch(self.context_encoder, sentences, batch_size)
+
+    def encode_in_batch(self, model, sentences: List[str], batch_size=128, **kwargs) -> np.ndarray:
+        model.to(self.device)
+        all_embeddings = []
+        for batch in tqdm(torch.utils.data.DataLoader(sentences, batch_size=batch_size, shuffle=False)):
+            inputs = self.tokenizer(batch, padding=True, truncation=True, return_tensors='pt', max_length=512)
+            inputs = {key: val.to(self.device) for key, val in inputs.items()}
+            outputs = model(**inputs)
+            ### POOLING
+            if self.pooling == "avg":
+                embeddings = self.mean_pooling(outputs[0], inputs['attention_mask'])
+            elif self.pooling == "cls":
+                embeddings = outputs.last_hidden_state[:, 0, :]  # [128, 768] = [batch, emb_dim]
+            else:
+                raise ValueError("Pooling method not supported")
+            all_embeddings.extend(embeddings.detach().cpu().numpy())
+        all_embeddings = np.array(all_embeddings)
+        print(all_embeddings.shape)
+        return all_embeddings
+
+    def mean_pooling(self, token_embeddings, mask):
+        token_embeddings = token_embeddings.masked_fill(~mask[..., None].bool(), 0.)
+        sentence_embeddings = token_embeddings.sum(dim=1) / mask.sum(dim=1)[..., None]
+        return sentence_embeddings
+
 
 
 def main(args):
     DATASET = args.dataset
-    MODEL = args.model  # "facebook/contriever-msmarco"  # "msmarco-distilbert-base-v3"
+    MODEL = args.query_model  # "facebook/contriever-msmarco"  # "msmarco-distilbert-base-v3"
+    POOLING = args.pooling
 
     dataset = DatasetLoader().load_dataset(DATASET, use_gold_docs=args.use_gold_docs)
     corpus, queries, qrels = dataset["corpus"], dataset["queries"], dataset["qrels"]
 
-    model = DRES(models.SentenceBERT(MODEL), batch_size=128)
-    retriever = EvaluateRetrieval(model, score_function="cos_sim")
+    # model = DRES(models.SentenceBERT(MODEL), batch_size=128)
+    model = DRES(YourCustomDEModel(args.query_model, args.context_model, POOLING), batch_size=32)
+    retriever = EvaluateRetrieval(model, score_function="dot")
 
     #### Retrieve dense results (format of results is identical to qrels)
     results = retriever.retrieve(corpus, queries)
@@ -125,6 +179,9 @@ def main(args):
         })
     df = pd.DataFrame(df_dict)
     df.attrs['model'] = MODEL
+    df.attrs['query_model'] = args.query_model
+    df.attrs['context_model'] = args.context_model
+    df.attrs['pooling'] = POOLING
     df.attrs['dataset'] = DATASET
     df.attrs['corpus_size'] = len(corpus)
     df.attrs['eval'] = {"ndcg": ndcg, "map": _map, "recall": recall, "precision": precision}
@@ -138,7 +195,9 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, default="nq")
-    parser.add_argument("--model", type=str, default="facebook/contriever-msmarco")
+    parser.add_argument("--query_model", type=str, default="facebook/contriever-msmarco")
+    parser.add_argument("--context_model", type=str, default="facebook/contriever-msmarco")
+    parser.add_argument("--pooling", type=str, default="avg")
     parser.add_argument("--use_gold_docs", type=lambda x: x.lower() == 'true', default=False, help="Only use gold docs and discard others")
     args = parser.parse_args()
     print(args)
