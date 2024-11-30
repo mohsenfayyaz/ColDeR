@@ -1,12 +1,9 @@
 import os
 from dotenv import load_dotenv
 from huggingface_hub import login
-
-load_dotenv()
-login(os.environ["HF_TOKEN"])
-print("CUDA_VISIBLE_DEVICES:", os.environ["CUDA_VISIBLE_DEVICES"], "HF_HOME:", os.environ["HF_HOME"])
-
 import torch
+import argparse
+import logging
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -21,150 +18,177 @@ from DecompX.src.modeling_bert import BertForSequenceClassification, BertModel
 from DecompX.src.modeling_roberta import RobertaForSequenceClassification, RobertaModel
 
 pd.set_option('display.max_columns', None)
+logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
 
-### NQ
-# df_raw = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/nq/facebook--contriever-msmarco_corpus2681468.pkl")
+def main(args):
+    load_dotenv()
+    login(os.environ["HF_TOKEN"])
+    print("CUDA_VISIBLE_DEVICES:", os.environ["CUDA_VISIBLE_DEVICES"], "HF_HOME:", os.environ["HF_HOME"])
 
-### RE_DOCRED
-df_raw = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/re-docred/facebook--contriever-msmarco_corpus105925.pkl")
-attrs = df_raw.attrs.copy()
-df_raw = df_raw.merge(pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test_validation.pkl"), left_on="query_id", right_on="id")
-df_raw.attrs = attrs
+    BEIR_FILE = args.beir_file
+    ### NQ
+    # df_raw = pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/nq/facebook--contriever-msmarco_corpus2681468.pkl")
 
-### df filtering
-import plotly.express as px
+    ### RE_DOCRED
+    df_raw = pd.read_pickle(BEIR_FILE)
+    attrs = df_raw.attrs.copy()
+    df_raw = df_raw.merge(pd.read_pickle("hf://datasets/Retriever-Contextualization/datasets/Re-DocRED/queries_test_validation.pkl"), left_on="query_id", right_on="id")
+    df_raw.attrs = attrs
+    logging.info(f"Pooling: {attrs['pooling']}")
 
-def find_index(l, idx, not_found_value=np.inf):
-    try:
-        return l.index(idx)
-    except:
-        return not_found_value
+    ### df filtering
+    import plotly.express as px
 
-### FILTER MULTI GOLD DOCS
-print("Total:", len(df_raw))
-df = df_raw.loc[df_raw["gold_docs"].str.len() == 1, :].copy()
-print("Total:", len(df))
-# df.drop_duplicates(subset=["query"], keep="first", inplace=True)
-# print("Total:", len(df))
+    def find_index(l, idx, not_found_value=np.inf):
+        try:
+            return l.index(idx)
+        except:
+            return not_found_value
 
-### COMPUTE HIT RANK
-df["hit_rank"] = df.apply(lambda row: min([find_index(list(row["scores_1000"].keys()), doc_id) + 1 for doc_id in row["gold_docs"]]), axis=1)
-# df["hit_rank"].hist(figsize=(8, 4), bins=50)
+    ### FILTER MULTI GOLD DOCS
+    print("Total:", len(df_raw))
+    df = df_raw.loc[df_raw["gold_docs"].str.len() == 1, :].copy()
+    print("Total:", len(df))
+    # df.drop_duplicates(subset=["query"], keep="first", inplace=True)
+    # print("Total:", len(df))
 
-dfc = df.copy(); dfc["hit_rank"] = dfc["hit_rank"].astype(str);
-fig = px.sunburst(dfc, path=[px.Constant("all"), 'hit_rank'], width=250, height=250)
-fig.update_traces(textinfo='label+percent entry+value')
-fig.update_layout(margin={'t':0,'l':0,'b':0,'r':0})
-fig.show("svg")
+    ### COMPUTE HIT RANK
+    df["hit_rank"] = df.apply(lambda row: min([find_index(list(row["scores_1000"].keys()), doc_id) + 1 for doc_id in row["gold_docs"]]), axis=1)
+    # df["hit_rank"].hist(figsize=(8, 4), bins=50)
 
-### Prepare Docs (title+text)
-df["gold_doc"] = df["gold_docs_text"].apply(lambda x: list(x.items())[0][1])
-df["gold_doc_title"] = df["gold_doc"].apply(lambda x: x["title"])
-df["gold_doc_text"] = df["gold_doc"].apply(lambda x: x["text"])
-df["gold_doc"] = df["gold_doc"].apply(lambda x: x["title"] + " " + x["text"])
-df["gold_doc_score"] = df["scores_gold"].apply(lambda x: list(x.items())[0][1])
+    dfc = df.copy(); dfc["hit_rank"] = dfc["hit_rank"].astype(str)
+    # fig = px.sunburst(dfc, path=[px.Constant("all"), 'hit_rank'], width=250, height=250)
+    # fig.update_traces(textinfo='label+percent entry+value')
+    # fig.update_layout(margin={'t':0,'l':0,'b':0,'r':0})
+    # fig.show("svg")
 
-df["pred_doc"] = df["predicted_docs_text_10"].apply(lambda x: list(x.items())[0][1])
-df["pred_doc_title"] = df["pred_doc"].apply(lambda x: x["title"])
-df["pred_doc_text"] = df["pred_doc"].apply(lambda x: x["text"])
-df["pred_doc"] = df["pred_doc"].apply(lambda x: x["title"] + " " + x["text"])
-df["pred_doc_score"] = df["scores_1000"].apply(lambda x: list(x.items())[0][1])
+    ### Prepare Docs (title+text)
+    df["gold_doc"] = df["gold_docs_text"].apply(lambda x: list(x.items())[0][1])
+    df["gold_doc_title"] = df["gold_doc"].apply(lambda x: x["title"])
+    df["gold_doc_text"] = df["gold_doc"].apply(lambda x: x["text"])
+    df["gold_doc"] = df["gold_doc"].apply(lambda x: x["title"] + " " + x["text"])
+    df["gold_doc_score"] = df["scores_gold"].apply(lambda x: list(x.items())[0][1])
 
-df["gold_doc_len"] = df["gold_doc"].str.split().apply(len)
-df["pred_doc_len"] = df["pred_doc"].str.split().apply(len)
+    df["pred_doc"] = df["predicted_docs_text_10"].apply(lambda x: list(x.items())[0][1])
+    df["pred_doc_title"] = df["pred_doc"].apply(lambda x: x["title"])
+    df["pred_doc_text"] = df["pred_doc"].apply(lambda x: x["text"])
+    df["pred_doc"] = df["pred_doc"].apply(lambda x: x["title"] + " " + x["text"])
+    df["pred_doc_score"] = df["scores_1000"].apply(lambda x: list(x.items())[0][1])
 
-DATASET = df.attrs["dataset"]
-MODEL = df.attrs["model"]  # 'facebook/contriever-msmarco'  # Only BERT or RoBERTa
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-CONFIGS = {
-    "DecompX":
-        DecompXConfig(
-            include_biases=True,
-            bias_decomp_type="absdot",
-            include_LN1=True,
-            include_FFN=True,
-            FFN_approx_type="GeLU_ZO",
-            include_LN2=True,
-            aggregation="vector",
-            include_classifier_w_pooler=True,
-            tanh_approx_type="ZO",
-            output_all_layers=True,
-            output_attention=None,
-            output_res1=None,
-            output_LN1=None,
-            output_FFN=None,
-            output_res2=None,
-            output_encoder=None,
-            output_aggregated="vector",  # Changed
-            output_pooler="norm",
-            output_classifier=True,
-        ),
-}
+    df["gold_doc_len"] = df["gold_doc"].str.split().apply(len)
+    df["pred_doc_len"] = df["pred_doc"].str.split().apply(len)
 
-def load_model_tokenizer(model_name):
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model_config = AutoConfig.from_pretrained(model_name)
-    if type(model_config) is transformers.models.roberta.configuration_roberta.RobertaConfig:
-        model = RobertaModel.from_pretrained(model_name)
-    elif type(model_config) is transformers.models.bert.configuration_bert.BertConfig:
-        model = BertModel.from_pretrained(model_name)
-    else:
-        raise Exception(f"Not implemented model: {model_name}")
-    model.to(DEVICE)
-    return model, tokenizer
-
-model, tokenizer = load_model_tokenizer(MODEL)
-print(MODEL)
-
-def run_decompx(text):
-    text = text.split()
-    inputs = tokenizer([text], padding=True, truncation=True, return_tensors='pt', is_split_into_words=True)
-    input_ids = inputs["input_ids"]
-    inputs.to(model.device)
-    with torch.no_grad():
-        last_hidden_states, pooler_output, hidden_states, decompx_last_layer_outputs, decompx_all_layers_outputs = model(
-            **inputs,
-            output_attentions=False,
-            return_dict=False,
-            output_hidden_states=True,
-            decompx_config=CONFIGS["DecompX"]
-        )
-        ### decompx_last_layer_outputs.aggregated ~ 1 * [1, 70, 70, 768] ~ layer * [batch, seq, seq, emb_dim] ###
-        ### last_hidden_states ~ [1, 70, 768] ~ [batch, seq_len, emb_dim]
-        # print(last_hidden_states.shape)  # 
-        mean_pooled = last_hidden_states[0].mean(dim=0)
-        decompx_last_layer_mean = decompx_last_layer_outputs.aggregated[0][0].mean(dim=(0))  # Mean over DecompX similar to the retriever [seq_len, emb_dim]
-        tokens_dot_scores = torch.einsum("ij,j->i", decompx_last_layer_mean, mean_pooled)  # [seq_len]
-        ranking = torch.argsort(tokens_dot_scores, descending=True).cpu().numpy()
-    return {
-        "tokens": tokenizer.convert_ids_to_tokens(input_ids[0]),  # [seq_len]
-        "tokens_dot_scores": tokens_dot_scores.cpu().numpy(),  # [seq_len]  (Dot score with mean)
-        # "decompx_last_layer_outputs": decompx_last_layer_outputs.aggregated[0][0].cpu().numpy(),  # .aggregated ~ 1 * [1, 70, 70, 768] ~ layer * [batch, seq, seq, emb_dim]
-        "decompx_last_layer_mean": decompx_last_layer_mean.cpu().numpy(),  # [seq_len, emb_dim]
-        "tokenizer_word_ids": inputs.word_ids(),  # [seq_len]
+    DATASET = df.attrs["dataset"]
+    MODEL = df.attrs["model"]  # 'facebook/contriever-msmarco'  # Only BERT or RoBERTa
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    CONFIGS = {
+        "DecompX":
+            DecompXConfig(
+                include_biases=True,
+                bias_decomp_type="absdot",
+                include_LN1=True,
+                include_FFN=True,
+                FFN_approx_type="GeLU_ZO",
+                include_LN2=True,
+                aggregation="vector",
+                include_classifier_w_pooler=True,
+                tanh_approx_type="ZO",
+                output_all_layers=True,
+                output_attention=None,
+                output_res1=None,
+                output_LN1=None,
+                output_FFN=None,
+                output_res2=None,
+                output_encoder=None,
+                output_aggregated="vector",  # Changed
+                output_pooler="norm",
+                output_classifier=True,
+            ),
     }
-    
-dfc = df.copy()  #.head(10)
-new_cols = []
-for row in tqdm(dfc.to_dict(orient="records")):
-    query = run_decompx(row["query"])
-    gold_doc = run_decompx(row["gold_doc"])
-    pred_doc = run_decompx(row["pred_doc"])
-    row_decompx = {}
-    for k, v in query.items():
-        row_decompx[f"query_decompx_{k}"] = v
-    for k, v in gold_doc.items():
-        row_decompx[f"gold_doc_decompx_{k}"] = v
-    for k, v in pred_doc.items():     
-        row_decompx[f"pred_doc_decompx_{k}"] = v
-    new_cols.append(row_decompx)
-dfc = pd.concat([dfc, pd.DataFrame(new_cols)], axis=1)
-dfc.attrs = attrs
 
-path = f"re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl"
-dfc.to_pickle(path)
-path = f"hf://datasets/Retriever-Contextualization/datasets/results/re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl"
-dfc.to_pickle(path)
-path = f"hf://datasets/Retriever-Contextualization/datasets/results/re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl.gz"
-dfc.to_pickle(path)
-print(path)
+    def load_model_tokenizer(model_name):
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model_config = AutoConfig.from_pretrained(model_name)
+        if type(model_config) is transformers.models.roberta.configuration_roberta.RobertaConfig:
+            model = RobertaModel.from_pretrained(model_name)
+        elif type(model_config) is transformers.models.bert.configuration_bert.BertConfig:
+            model = BertModel.from_pretrained(model_name)
+        else:
+            raise Exception(f"Not implemented model: {model_name}")
+        model.to(DEVICE)
+        return model, tokenizer
+
+    model, tokenizer = load_model_tokenizer(MODEL)
+    logging.info(MODEL)
+
+    def run_decompx(text):
+        text = text.split()
+        inputs = tokenizer([text], padding=True, truncation=True, return_tensors='pt', is_split_into_words=True, max_length=512)
+        input_ids = inputs["input_ids"]
+        inputs.to(model.device)
+        with torch.no_grad():
+            last_hidden_states, pooler_output, hidden_states, decompx_last_layer_outputs, decompx_all_layers_outputs = model(
+                **inputs,
+                output_attentions=False,
+                return_dict=False,
+                output_hidden_states=True,
+                decompx_config=CONFIGS["DecompX"]
+            )
+            ### decompx_last_layer_outputs.aggregated ~ 1 * [1, 70, 70, 768] ~ layer * [batch, seq, seq, emb_dim] ###
+            ### last_hidden_states ~ [1, 70, 768] ~ [batch, seq_len, emb_dim]
+            # print(last_hidden_states.shape)  # 
+            if attrs["pooling"] == "avg":
+                cls_or_mean_pooled = last_hidden_states[0].mean(dim=0)
+                decompx_last_layer_pooled = decompx_last_layer_outputs.aggregated[0][0].mean(dim=(0))  # Mean over DecompX similar to the retriever [seq_len, emb_dim]
+                assert torch.allclose(cls_or_mean_pooled, decompx_last_layer_pooled.sum(dim=0), atol=1e-3)
+                tokens_dot_scores = torch.einsum("ij,j->i", decompx_last_layer_pooled, cls_or_mean_pooled)  # [seq_len]
+            elif attrs["pooling"] == "cls":
+                cls_or_mean_pooled = last_hidden_states[0][0]
+                decompx_last_layer_pooled = decompx_last_layer_outputs.aggregated[0][0][0]  # Choose CLS decompx similar to the retriever [seq_len, emb_dim]
+                assert torch.allclose(cls_or_mean_pooled, decompx_last_layer_pooled.sum(dim=0), atol=1e-3)
+                tokens_dot_scores = torch.einsum("ij,j->i", decompx_last_layer_pooled, cls_or_mean_pooled)  # [seq_len]
+            else:
+                raise ValueError("Pooling method not supported")
+            ranking = torch.argsort(tokens_dot_scores, descending=True).cpu().numpy()
+        return {
+            "tokens": tokenizer.convert_ids_to_tokens(input_ids[0]),  # [seq_len]
+            "tokenizer_word_ids": inputs.word_ids(),  # [seq_len]
+            
+            "cls_or_mean_pooled": cls_or_mean_pooled.cpu().numpy(),  # [emb_dim]
+            "tokens_dot_scores": tokens_dot_scores.cpu().numpy(),  # [seq_len]  (Dot score with mean/cls)
+            "decompx_last_layer_pooled": decompx_last_layer_pooled.cpu().numpy(),  # [seq_len, emb_dim]
+            # "decompx_last_layer_outputs": decompx_last_layer_outputs.aggregated[0][0].cpu().numpy(),  # .aggregated ~ 1 * [1, 70, 70, 768] ~ layer * [batch, seq, seq, emb_dim]
+        }
+        
+    dfc = df.copy()   #.head(100)
+    new_cols = []
+    for row in tqdm(dfc.to_dict(orient="records")):
+        query = run_decompx(row["query"])
+        gold_doc = run_decompx(row["gold_doc"])
+        pred_doc = run_decompx(row["pred_doc"])
+        row_decompx = {}
+        for k, v in query.items():
+            row_decompx[f"query_decompx_{k}"] = v
+        for k, v in gold_doc.items():
+            row_decompx[f"gold_doc_decompx_{k}"] = v
+        for k, v in pred_doc.items():     
+            row_decompx[f"pred_doc_decompx_{k}"] = v
+        new_cols.append(row_decompx)
+    dfc = pd.concat([dfc, pd.DataFrame(new_cols)], axis=1)
+    dfc.attrs = attrs
+
+    path = f"re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl"
+    dfc.to_pickle(path)
+    path = f"hf://datasets/Retriever-Contextualization/datasets/results/re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl"
+    dfc.to_pickle(path)
+    path = f"hf://datasets/Retriever-Contextualization/datasets/results/re-docred_{MODEL.replace('/', '--')}_{len(dfc)}.pkl.gz"
+    dfc.to_pickle(path)
+    logging.info(path)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--beir_file", type=str, default="facebook/contriever-msmarco")
+    args = parser.parse_args()
+    logging.info(args)
+    main(args)
