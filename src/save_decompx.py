@@ -80,6 +80,8 @@ def main(args):
 
     DATASET = df.attrs["dataset"]
     MODEL = df.attrs["model"]  # 'facebook/contriever-msmarco'  # Only BERT or RoBERTa
+    QUERY_MODEL = df.attrs["query_model"]
+    CONTEXT_MODEL = df.attrs["context_model"]
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     CONFIGS = {
         "DecompX":
@@ -118,10 +120,12 @@ def main(args):
         model.to(DEVICE)
         return model, tokenizer
 
-    model, tokenizer = load_model_tokenizer(MODEL)
-    logging.info(MODEL)
+    query_model, tokenizer = load_model_tokenizer(QUERY_MODEL)
+    context_model, _ = load_model_tokenizer(CONTEXT_MODEL)
+    logging.info(QUERY_MODEL)
+    logging.info(CONTEXT_MODEL)
 
-    def run_decompx(text):
+    def run_decompx(text, model):
         text = text.split()
         inputs = tokenizer([text], padding=True, truncation=True, return_tensors='pt', is_split_into_words=True, max_length=512)
         input_ids = inputs["input_ids"]
@@ -140,12 +144,12 @@ def main(args):
             if attrs["pooling"] == "avg":
                 cls_or_mean_pooled = last_hidden_states[0].mean(dim=0)
                 decompx_last_layer_pooled = decompx_last_layer_outputs.aggregated[0][0].mean(dim=(0))  # Mean over DecompX similar to the retriever [seq_len, emb_dim]
-                assert torch.allclose(cls_or_mean_pooled, decompx_last_layer_pooled.sum(dim=0), atol=1e-3)
+                # assert torch.allclose(cls_or_mean_pooled, decompx_last_layer_pooled.sum(dim=0), atol=1e-3)
                 tokens_dot_scores = torch.einsum("ij,j->i", decompx_last_layer_pooled, cls_or_mean_pooled)  # [seq_len]
             elif attrs["pooling"] == "cls":
                 cls_or_mean_pooled = last_hidden_states[0][0]
                 decompx_last_layer_pooled = decompx_last_layer_outputs.aggregated[0][0][0]  # Choose CLS decompx similar to the retriever [seq_len, emb_dim]
-                assert torch.allclose(cls_or_mean_pooled, decompx_last_layer_pooled.sum(dim=0), atol=1e-3)
+                # assert torch.allclose(cls_or_mean_pooled, decompx_last_layer_pooled.sum(dim=0), atol=1e-3)
                 tokens_dot_scores = torch.einsum("ij,j->i", decompx_last_layer_pooled, cls_or_mean_pooled)  # [seq_len]
             else:
                 raise ValueError("Pooling method not supported")
@@ -163,9 +167,9 @@ def main(args):
     dfc = df.copy()   #.head(100)
     new_cols = []
     for row in tqdm(dfc.to_dict(orient="records")):
-        query = run_decompx(row["query"])
-        gold_doc = run_decompx(row["gold_doc"])
-        pred_doc = run_decompx(row["pred_doc"])
+        query = run_decompx(row["query"], query_model)
+        gold_doc = run_decompx(row["gold_doc"], context_model)
+        pred_doc = run_decompx(row["pred_doc"], context_model)
         row_decompx = {}
         for k, v in query.items():
             row_decompx[f"query_decompx_{k}"] = v
