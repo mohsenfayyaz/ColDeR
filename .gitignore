@@ -6,3 +6,4 @@ src/datasets/*
 src/notebooks/DocRED/*
 src/notebooks/hf/*
 *.pkl
+src/notebooks/mohsenfayyaz.code-workspace
