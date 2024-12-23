@@ -151,7 +151,7 @@ def main(args):
     corpus, queries, qrels = dataset["corpus"], dataset["queries"], dataset["qrels"]
 
     # model = DRES(models.SentenceBERT(MODEL), batch_size=128)
-    model = DRES(YourCustomDEModel(args.query_model, args.context_model, POOLING), batch_size=32)
+    model = DRES(YourCustomDEModel(args.query_model, args.context_model, POOLING), batch_size=16)
     retriever = EvaluateRetrieval(model, score_function="dot")
 
     #### Retrieve dense results (format of results is identical to qrels)
