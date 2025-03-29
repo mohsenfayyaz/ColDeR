@@ -8,3 +8,5 @@ src/notebooks/hf/*
 *.pkl
 src/notebooks/mohsenfayyaz.code-workspace
 src/notebooks/figs/*
+src/notebooks/Rebuttal/downloads/*
+src/notebooks/Rebuttal/experiments/*
