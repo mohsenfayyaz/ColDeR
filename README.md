@@ -5,10 +5,10 @@
 <p align="center">A Framework for Identifying Biases in Retrievers</p>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/2503.05037"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2503.05037-b31b1b.svg"></a>
-  <a href="https://huggingface.co/datasets/mohsenfayyaz/ColDeR"><img alt="HuggingFace Dataset" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Dataset-FFD21E?style=flat"></a>
-  <a href="https://colab.research.google.com/github/mohsenfayyaz/ColDeR/blob/main/Benchmark_Eval.ipynb"><img alt="Benchmark Eval Colab Demo" src="https://img.shields.io/badge/​-Evaluate%20in%20Colab-blue?logo=googlecolab&logoColor=F9AB00&style=flat"></a>
-  <a href="https://github.com/mohsenfayyaz/ColDeR"><img alt="Github Code" src="https://img.shields.io/badge/GitHub-%23121011.svg?logo=github&logoColor=white&style=flat"></a>
+  <a style="display: inline; max-width: none" href="https://arxiv.org/abs/2503.05037"><img style="display: inline; max-width: none" alt="arXiv" src="https://img.shields.io/badge/arXiv-2503.05037-b31b1b.svg"></a>
+  <a style="display: inline; max-width: none" href="https://huggingface.co/datasets/mohsenfayyaz/ColDeR"><img style="display: inline; max-width: none" alt="HuggingFace Dataset" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Dataset-FFD21E?style=flat"></a>
+  <a style="display: inline; max-width: none" href="https://colab.research.google.com/github/mohsenfayyaz/ColDeR/blob/main/Benchmark_Eval.ipynb"><img style="display: inline; max-width: none" alt="Benchmark Eval Colab Demo" src="https://img.shields.io/badge/​-Evaluate%20in%20Colab-blue?logo=googlecolab&logoColor=F9AB00&style=flat"></a>
+  <a style="display: inline; max-width: none" href="https://github.com/mohsenfayyaz/ColDeR"><img style="display: inline; max-width: none" alt="Github Code" src="https://img.shields.io/badge/GitHub-%23121011.svg?logo=github&logoColor=white&style=flat"></a>
 </p>
 
 <p align="center">
