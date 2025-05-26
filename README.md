@@ -21,7 +21,8 @@ Retrievers consistently score <b>document_1</b> higher than <b>document_2</b> in
 ⇒ Retrieval biases often outweigh the impact of answer presence.
 </blockquote>
 
-<h2 align="center">🏆Leaderboard🏆</h2>
+
+<h2 align="center">🏆 Leaderboard 🏆</h2>
 
 <div align="center">
   
@@ -38,10 +39,10 @@ Retrievers consistently score <b>document_1</b> higher than <b>document_2</b> in
 
 Evaluate any model using this code: [https://colab.research.google.com/github/mohsenfayyaz/ColDeR/blob/main/Benchmark_Eval.ipynb](https://colab.research.google.com/github/mohsenfayyaz/ColDeR/blob/main/Benchmark_Eval.ipynb)
 
----
 
+<h2 align="center">🔍 Dataset Examples 🔍</h2>
 <img src="https://huggingface.co/datasets/mohsenfayyaz/ColDeR/resolve/main/figs/examples.png" width="90%" title="" style="border-radius: 5px; max-width: 800px">
-<img src="https://huggingface.co/datasets/mohsenfayyaz/ColDeR/resolve/main/figs/fig1.png" width="300" title="" style="border-radius: 15px;">
+<!-- <img src="https://huggingface.co/datasets/mohsenfayyaz/ColDeR/resolve/main/figs/fig1.png" width="300" title="" style="border-radius: 15px;"> -->
 </center>
 
 </div>
