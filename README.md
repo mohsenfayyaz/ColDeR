@@ -1,5 +1,5 @@
 <center>
-<h1 align="center">❄️ ColDeR Dataset: Collapse of Dense Retrievers [ ACL 2025 ] ❄️</h1>
+<h1 align="center">❄️ Collapse of Dense Retrievers [ ACL 2025 ] ❄️</h1>
 
 <!-- Provide a quick summary of the dataset. -->
 <p align="center">A Framework for Identifying Biases in Retrievers</p>
