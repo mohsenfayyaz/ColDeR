@@ -90,13 +90,24 @@ Evaluate any model using this code: [https://colab.research.google.com/github/mo
 **BibTeX:**
 If you found this work useful, please consider citing our paper:
 ```bibtex
-@misc{fayyaz2025collapsedenseretrieversshort,
-      title={Collapse of Dense Retrievers: Short, Early, and Literal Biases Outranking Factual Evidence}, 
-      author={Mohsen Fayyaz and Ali Modarressi and Hinrich Schuetze and Nanyun Peng},
-      year={2025},
-      eprint={2503.05037},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2503.05037}, 
+@inproceedings{fayyaz-etal-2025-collapse,
+    title = "Collapse of Dense Retrievers: Short, Early, and Literal Biases Outranking Factual Evidence",
+    author = "Fayyaz, Mohsen  and
+      Modarressi, Ali  and
+      Schuetze, Hinrich  and
+      Peng, Nanyun",
+    editor = "Che, Wanxiang  and
+      Nabende, Joyce  and
+      Shutova, Ekaterina  and
+      Pilehvar, Mohammad Taher",
+    booktitle = "Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = jul,
+    year = "2025",
+    address = "Vienna, Austria",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2025.acl-long.447/",
+    pages = "9136--9152",
+    ISBN = "979-8-89176-251-0",
+    abstract = "Dense retrieval models are commonly used in Information Retrieval (IR) applications, such as Retrieval-Augmented Generation (RAG). Since they often serve as the first step in these systems, their robustness is critical to avoid downstream failures. In this work, we repurpose a relation extraction dataset (e.g., Re-DocRED) to design controlled experiments that quantify the impact of heuristic biases, such as a preference for shorter documents, on retrievers like Dragon+ and Contriever. We uncover major vulnerabilities, showing retrievers favor shorter documents, early positions, repeated entities, and literal matches, all while ignoring the answer{'}s presence! Notably, when multiple biases combine, models exhibit catastrophic performance degradation, selecting the answer-containing document in less than 10{\%} of cases over a synthetic biased document without the answer. Furthermore, we show that these biases have direct consequences for downstream applications like RAG, where retrieval-preferred documents can mislead LLMs, resulting in a 34{\%} performance drop than providing no documents at all.https://huggingface.co/datasets/mohsenfayyaz/ColDeR"
 }
 ```
